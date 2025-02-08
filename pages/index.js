@@ -1,20 +1,20 @@
+// pages/index.js
 import Head from 'next/head'
 import Header from '@components/Header'
 import Footer from '@components/Footer'
+import FileProcessor from '@components/FileProcessor'
 
 export default function Home() {
   return (
-    <div className="container">
+    <div className="container mx-auto px-4">
       <Head>
-        <title>Next.js Starter!</title>
+        <title>File Processing Service</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main>
-        <Header title="Welcome to my app!" />
-        <p className="description">
-          Get started by editing <code>pages/index.js</code>
-        </p>
+      <main className="min-h-screen py-20">
+        <Header title="File Processing Service" />
+        <FileProcessor />
       </main>
 
       <Footer />
