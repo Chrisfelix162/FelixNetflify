@@ -94,6 +94,30 @@ export default function Dashboard() {
                   <h3 className="text-lg font-semibold text-gray-800 truncate">
                     {summary.originalFileName}
                   </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {formatDate(summary.createdAt)}
+                  </p>
+                  <div className="mt-4">
+                    <p className="text-gray-600 line-clamp-3">
+                      {summary.summary.substring(0, 150)}...
+                    </p>
+                  </div>
+                  <div className="mt-4 flex justify-between items-center">
+                    <div className="flex space-x-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        {summary.summaryConfig.length}
+                      </span>
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        {summary.summaryConfig.style}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => router.push(`/summary/${summary.id}`)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      View Details
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
