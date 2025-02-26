@@ -1,36 +1,36 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import netlifyIdentity from 'netlify-identity-widget';
 
-const AuthContext = createContext({
-  user: null,
-  login: () => {},
-  logout: () => {},
-  authReady: false
-});
+const AuthContext = createContext();
 
-export const AuthContextProvider = ({ children }) => {
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
+    // Initialize Netlify Identity
     netlifyIdentity.init();
-    
+
+    // Set user if already logged in
+    netlifyIdentity.on('init', (user) => {
+      setUser(user);
+      setAuthReady(true);
+    });
+
+    // Set user on login
     netlifyIdentity.on('login', (user) => {
       setUser(user);
       netlifyIdentity.close();
     });
-    
+
+    // Clear user on logout
     netlifyIdentity.on('logout', () => {
       setUser(null);
-    });
-    
-    netlifyIdentity.on('init', () => {
-      setUser(netlifyIdentity.currentUser());
-      setAuthReady(true);
     });
 
     // Cleanup
     return () => {
+      netlifyIdentity.off('init');
       netlifyIdentity.off('login');
       netlifyIdentity.off('logout');
     };
@@ -44,13 +44,13 @@ export const AuthContextProvider = ({ children }) => {
     netlifyIdentity.logout();
   };
 
-  const context = { user, login, logout, authReady };
-  
   return (
-    <AuthContext.Provider value={context}>
+    <AuthContext.Provider value={{ user, login, logout, authReady }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext); 
+export const useAuth = () => {
+  return useContext(AuthContext);
+}; 
