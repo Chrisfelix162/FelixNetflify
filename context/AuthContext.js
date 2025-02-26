@@ -8,11 +8,9 @@ export const AuthProvider = ({ children }) => {
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    // Initialize Netlify Identity with your site URL
-    netlifyIdentity.init({
-      APIUrl: 'https://dulcet-donut-56ceb6.netlify.app/.netlify/identity',
-      logo: false // Optional: hide the Netlify logo
-    });
+    // Initialize Netlify Identity without specifying the API URL
+    // It will automatically detect the correct URL
+    netlifyIdentity.init();
 
     // Set user if already logged in
     netlifyIdentity.on('init', (user) => {
