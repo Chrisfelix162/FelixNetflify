@@ -1,6 +1,7 @@
 // components/FileProcessor.jsx
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useRouter } from 'next/router'
 
 export default function FileProcessor() {
   const [file, setFile] = useState(null)
@@ -14,9 +15,71 @@ export default function FileProcessor() {
   })
   const { user } = useAuth()
   const fileInputRef = useRef(null)
+  const dropAreaRef = useRef(null)
+  const router = useRouter()
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files[0]
+  useEffect(() => {
+    const dropArea = dropAreaRef.current
+    
+    if (!dropArea) return
+    
+    const preventDefaults = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
+    const highlight = () => {
+      dropArea.classList.add('bg-blue-50', 'border-blue-300')
+    }
+    
+    const unhighlight = () => {
+      dropArea.classList.remove('bg-blue-50', 'border-blue-300')
+    }
+    
+    const handleDrop = (e) => {
+      preventDefaults(e)
+      unhighlight()
+      
+      const dt = e.dataTransfer
+      const files = dt.files
+      
+      if (files && files.length > 0) {
+        handleFiles(files[0])
+      }
+    }
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false)
+    })
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, highlight, false)
+    })
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, unhighlight, false)
+    })
+    
+    dropArea.addEventListener('drop', handleDrop, false)
+    
+    return () => {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.removeEventListener(eventName, preventDefaults)
+      })
+      
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.removeEventListener(eventName, highlight)
+      })
+      
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.removeEventListener(eventName, unhighlight)
+      })
+      
+      dropArea.removeEventListener('drop', handleDrop)
+    }
+  }, [])
+
+  const handleFiles = (selectedFile) => {
     if (selectedFile && selectedFile.type === 'video/mp4') {
       // Check file size (limit to 100MB for example)
       if (selectedFile.size > 100 * 1024 * 1024) {
@@ -34,31 +97,28 @@ export default function FileProcessor() {
     }
   }
 
-  const handleDrop = (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    
-    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-      const droppedFile = event.dataTransfer.files[0]
-      if (droppedFile.type === 'video/mp4') {
-        if (droppedFile.size > 100 * 1024 * 1024) {
-          setMessage('File size exceeds 100MB limit')
-          setStatus('error')
-          return
-        }
-        setFile(droppedFile)
-        setMessage(`Selected file: ${droppedFile.name}`)
-        setStatus('ready')
-      } else {
-        setMessage('Please select a valid MP4 file')
-        setStatus('error')
-      }
-    }
+  const handleFileChange = (event) => {
+    const selectedFile = event.target.files[0]
+    handleFiles(selectedFile)
   }
 
-  const handleDragOver = (event) => {
-    event.preventDefault()
-    event.stopPropagation()
+  const handleConfigChange = (e) => {
+    const { name, value } = e.target
+    setSummaryConfig(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleFocusAreaChange = (e) => {
+    const { value, checked } = e.target
+    setSummaryConfig(prev => {
+      if (checked) {
+        return { ...prev, focusAreas: [...prev.focusAreas, value] }
+      } else {
+        return { ...prev, focusAreas: prev.focusAreas.filter(area => area !== value) }
+      }
+    })
   }
 
   const handleSubmit = async (event) => {
@@ -90,95 +150,87 @@ export default function FileProcessor() {
     
     try {
       // Upload to Netlify function
-      const response = await fetch('/.netlify/functions/process-video', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          // No Content-Type header as it's set automatically with FormData
-          'Authorization': `Bearer ${user.token.access_token}`
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          )
-          setProgress(percentCompleted)
-          if (percentCompleted < 100) {
-            setMessage(`Uploading: ${percentCompleted}%`)
+      const xhr = new XMLHttpRequest()
+      
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100)
+          setProgress(percentComplete)
+          
+          if (percentComplete < 100) {
+            setMessage(`Uploading: ${percentComplete}%`)
           } else {
             setMessage('Processing video...')
           }
         }
       })
       
-      if (!response.ok) {
-        throw new Error('Failed to process video')
-      }
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const response = JSON.parse(xhr.responseText)
+          setStatus('success')
+          setMessage('Video processed successfully!')
+          
+          // Redirect to summary page
+          setTimeout(() => {
+            router.push(`/summary/${response.summaryId}`)
+          }, 1500)
+        } else {
+          setStatus('error')
+          setMessage(`Error: ${xhr.statusText}`)
+        }
+      })
       
-      const result = await response.json()
+      xhr.addEventListener('error', () => {
+        setStatus('error')
+        setMessage('Network error occurred')
+      })
       
-      setMessage('Video processed successfully! Redirecting to summary...')
-      setStatus('success')
-      
-      // Redirect to the summary page
-      window.location.href = `/summary/${result.summaryId}`
+      xhr.open('POST', '/.netlify/functions/process-video')
+      xhr.setRequestHeader('Authorization', `Bearer ${user.token.access_token}`)
+      xhr.send(formData)
       
     } catch (error) {
       console.error('Error processing video:', error)
-      setMessage(`Error: ${error.message}`)
       setStatus('error')
+      setMessage(`Error: ${error.message}`)
     }
   }
 
-  const handleConfigChange = (e) => {
-    const { name, value } = e.target
-    setSummaryConfig(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-
-  const handleFocusAreaChange = (e) => {
-    const { value, checked } = e.target
-    setSummaryConfig(prev => {
-      if (checked) {
-        return { ...prev, focusAreas: [...prev.focusAreas, value] }
-      } else {
-        return { ...prev, focusAreas: prev.focusAreas.filter(area => area !== value) }
-      }
-    })
-  }
-
   return (
-    <div className="mt-10">
-      <div className="max-w-xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold mb-4">Upload Video File</h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="w-full max-w-2xl">
+      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        <form onSubmit={handleSubmit} className="p-6">
           <div 
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer"
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
+            ref={dropAreaRef}
+            className="border-2 border-dashed border-gray-300 rounded-lg p-8 mb-6 text-center cursor-pointer transition-colors duration-200"
             onClick={() => fileInputRef.current.click()}
           >
             <input
-              ref={fileInputRef}
               type="file"
-              accept="video/mp4"
+              ref={fileInputRef}
               onChange={handleFileChange}
+              accept="video/mp4"
               className="hidden"
             />
-            <div className="space-y-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            
+            <div className="flex flex-col items-center justify-center">
+              <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
               </svg>
-              <p className="text-gray-600">Drag and drop your MP4 file here, or click to browse</p>
-              <p className="text-sm text-gray-500">Maximum file size: 100MB</p>
+              
+              <p className="text-lg font-medium text-gray-700 mb-1">
+                {file ? file.name : 'Drag and drop your video here'}
+              </p>
+              <p className="text-sm text-gray-500">
+                {file ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : 'or click to browse (MP4 only, max 100MB)'}
+              </p>
             </div>
           </div>
 
           {file && status === 'ready' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Summary Configuration</h3>
+            <div className="space-y-6 mb-6">
+              <h3 className="text-lg font-medium text-gray-900">Summary Configuration</h3>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Summary Length</label>
@@ -250,7 +302,7 @@ export default function FileProcessor() {
           )}
 
           {message && (
-            <div className={`p-4 rounded-lg ${
+            <div className={`p-4 rounded-lg mb-6 ${
               status === 'error' 
                 ? 'bg-red-50 text-red-700' 
                 : status === 'success'
@@ -262,7 +314,7 @@ export default function FileProcessor() {
           )}
 
           {status === 'processing' && (
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
               <div 
                 className="bg-blue-600 h-2.5 rounded-full" 
                 style={{ width: `${progress}%` }}
