@@ -47,9 +47,26 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log('Received video processing request');
+    
     // Parse form data
     const { fields, files } = await parseFormData(event);
+    
+    if (!files || !files.file) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'No file uploaded' })
+      };
+    }
+    
     const userId = fields.userId;
+    if (!userId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'User ID is required' })
+      };
+    }
+    
     const summaryLength = fields.summaryLength || 'medium';
     const summaryStyle = fields.summaryStyle || 'concise';
     const focusAreas = JSON.parse(fields.focusAreas || '[]');
@@ -66,28 +83,30 @@ exports.handler = async (event, context) => {
     const videoPath = videoFile.filepath;
     const videoFileName = videoFile.originalFilename;
     
+    console.log(`Processing video: ${videoFileName}`);
+    
     // Extract audio from video
     const audioPath = path.join(tempDir, 'audio.mp3');
     await extractAudio(videoPath, audioPath);
     
     // Upload audio to Azure Blob Storage
-    const audioBlob = await uploadToAzureStorage(audioPath, `${jobId}/audio.mp3`);
+    const audioUploadResult = await uploadToAzureStorage(audioPath, `${jobId}/audio.mp3`);
     
-    // Transcribe audio using Deepgram
+    // Transcribe audio
     const transcript = await transcribeAudio(audioPath);
     
-    // Generate summary using OpenAI
+    // Generate summary
     const summary = await generateSummary(transcript, summaryLength, summaryStyle, focusAreas);
     
-    // Store metadata in Cosmos DB
+    // Create summary item in Cosmos DB
     const summaryItem = {
       id: jobId,
       userId,
       originalFileName: videoFileName,
-      audioUrl: audioBlob.url,
       transcript,
       summary,
-      summaryConfig: {
+      audioUrl: audioUploadResult.url,
+      config: {
         length: summaryLength,
         style: summaryStyle,
         focusAreas
@@ -96,6 +115,7 @@ exports.handler = async (event, context) => {
     };
     
     await container.items.create(summaryItem);
+    console.log(`Created summary with ID: ${jobId}`);
     
     // Clean up temp files
     fs.unlinkSync(audioPath);
@@ -125,23 +145,33 @@ exports.handler = async (event, context) => {
 // Helper function to parse form data
 function parseFormData(event) {
   return new Promise((resolve, reject) => {
-    // In Netlify Functions, event.body is a string
-    // We need to convert it to a buffer for formidable
-    const formData = new formidable.IncomingForm();
-    
-    // Create a mock request object
-    const req = {
-      headers: event.headers,
-      body: Buffer.from(event.body, 'base64')
-    };
-    
-    formData.parse(req, (err, fields, files) => {
-      if (err) {
-        reject(err);
-        return;
+    try {
+      const formData = new formidable.IncomingForm();
+      
+      // Create a mock request object
+      const req = {
+        headers: event.headers,
+      };
+      
+      // For Netlify Functions, we need to handle the body differently
+      if (event.isBase64Encoded) {
+        req.body = Buffer.from(event.body, 'base64');
+      } else {
+        req.body = event.body;
       }
-      resolve({ fields, files });
-    });
+      
+      formData.parse(req, (err, fields, files) => {
+        if (err) {
+          console.error('Error parsing form data:', err);
+          reject(err);
+          return;
+        }
+        resolve({ fields, files });
+      });
+    } catch (error) {
+      console.error('Error in parseFormData:', error);
+      reject(error);
+    }
   });
 }
 

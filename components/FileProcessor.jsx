@@ -37,17 +37,15 @@ export default function FileProcessor() {
     }
     
     const handleDrop = (e) => {
-      preventDefaults(e)
-      unhighlight()
-      
       const dt = e.dataTransfer
       const files = dt.files
       
-      if (files && files.length > 0) {
+      if (files.length) {
         handleFiles(files[0])
       }
     }
     
+    // Add event listeners
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
       dropArea.addEventListener(eventName, preventDefaults, false)
     })
@@ -157,9 +155,7 @@ export default function FileProcessor() {
           const percentComplete = Math.round((event.loaded / event.total) * 100)
           setProgress(percentComplete)
           
-          if (percentComplete < 100) {
-            setMessage(`Uploading: ${percentComplete}%`)
-          } else {
+          if (percentComplete === 100) {
             setMessage('Processing video...')
           }
         }
@@ -177,17 +173,26 @@ export default function FileProcessor() {
           }, 1500)
         } else {
           setStatus('error')
-          setMessage(`Error: ${xhr.statusText}`)
+          setMessage(`Error: ${xhr.statusText || 'Failed to process video'}`)
+          console.error('Server response:', xhr.responseText)
         }
       })
       
       xhr.addEventListener('error', () => {
         setStatus('error')
         setMessage('Network error occurred')
+        console.error('XHR error occurred')
       })
       
       xhr.open('POST', '/.netlify/functions/process-video')
-      xhr.setRequestHeader('Authorization', `Bearer ${user.token.access_token}`)
+      
+      // Make sure we have the token before sending
+      if (user && user.token && user.token.access_token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${user.token.access_token}`)
+      } else {
+        console.log('User token information:', user)
+      }
+      
       xhr.send(formData)
       
     } catch (error) {
@@ -229,72 +234,73 @@ export default function FileProcessor() {
           </div>
 
           {file && status === 'ready' && (
-            <div className="space-y-6 mb-6">
-              <h3 className="text-lg font-medium text-gray-900">Summary Configuration</h3>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Summary Length</label>
-                <select 
-                  name="length"
-                  value={summaryConfig.length}
-                  onChange={handleConfigChange}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                >
-                  <option value="short">Short (1-2 paragraphs)</option>
-                  <option value="medium">Medium (3-4 paragraphs)</option>
-                  <option value="long">Long (5+ paragraphs)</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Summary Style</label>
-                <select 
-                  name="style"
-                  value={summaryConfig.style}
-                  onChange={handleConfigChange}
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                >
-                  <option value="concise">Concise</option>
-                  <option value="detailed">Detailed</option>
-                  <option value="bullet-points">Bullet Points</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Focus Areas (Optional)</label>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <input 
-                      type="checkbox" 
-                      id="technical" 
-                      value="technical"
-                      checked={summaryConfig.focusAreas.includes('technical')}
-                      onChange={handleFocusAreaChange}
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                    />
-                    <label htmlFor="technical" className="ml-2 text-sm text-gray-700">Technical Details</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input 
-                      type="checkbox" 
-                      id="key-points" 
-                      value="key-points"
-                      checked={summaryConfig.focusAreas.includes('key-points')}
-                      onChange={handleFocusAreaChange}
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                    />
-                    <label htmlFor="key-points" className="ml-2 text-sm text-gray-700">Key Points</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input 
-                      type="checkbox" 
-                      id="action-items" 
-                      value="action-items"
-                      checked={summaryConfig.focusAreas.includes('action-items')}
-                      onChange={handleFocusAreaChange}
-                      className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                    />
-                    <label htmlFor="action-items" className="ml-2 text-sm text-gray-700">Action Items</label>
+            <div className="mb-6">
+              <h3 className="text-md font-medium text-gray-700 mb-3">Summary Options</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Length</label>
+                  <select
+                    name="length"
+                    value={summaryConfig.length}
+                    onChange={handleConfigChange}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="short">Short (1-2 paragraphs)</option>
+                    <option value="medium">Medium (3-4 paragraphs)</option>
+                    <option value="long">Long (5+ paragraphs)</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Style</label>
+                  <select
+                    name="style"
+                    value={summaryConfig.style}
+                    onChange={handleConfigChange}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="concise">Concise</option>
+                    <option value="detailed">Detailed</option>
+                    <option value="bullet-points">Bullet Points</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Focus Areas (Optional)</label>
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <input 
+                        type="checkbox" 
+                        id="technical" 
+                        value="technical"
+                        checked={summaryConfig.focusAreas.includes('technical')}
+                        onChange={handleFocusAreaChange}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      <label htmlFor="technical" className="ml-2 text-sm text-gray-700">Technical Details</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input 
+                        type="checkbox" 
+                        id="key-points" 
+                        value="key-points"
+                        checked={summaryConfig.focusAreas.includes('key-points')}
+                        onChange={handleFocusAreaChange}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      <label htmlFor="key-points" className="ml-2 text-sm text-gray-700">Key Points</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input 
+                        type="checkbox" 
+                        id="action-items" 
+                        value="action-items"
+                        checked={summaryConfig.focusAreas.includes('action-items')}
+                        onChange={handleFocusAreaChange}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                      />
+                      <label htmlFor="action-items" className="ml-2 text-sm text-gray-700">Action Items</label>
+                    </div>
                   </div>
                 </div>
               </div>
