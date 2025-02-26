@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
-import Navbar from '../components/Navbar';
+import Navbar from '../components/Navbar.jsx';
 import Footer from '../components/Footer';
 import FileProcessor from '../components/FileProcessor';
 
