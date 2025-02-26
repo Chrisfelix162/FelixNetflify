@@ -1,8 +1,10 @@
 import { useAuth } from '../context/AuthContext';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 export default function Navbar() {
   const { user, login, logout } = useAuth();
+  const router = useRouter();
 
   return (
     <nav className="bg-white shadow-md py-4">
@@ -21,9 +23,12 @@ export default function Navbar() {
             </button>
           ) : (
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Hello, {user.user_metadata.full_name || user.email}</span>
+              <span className="text-gray-700">Hello, {user.user_metadata?.full_name || user.email}</span>
               <Link href="/dashboard">
                 <span className="text-blue-600 hover:text-blue-800 cursor-pointer">Dashboard</span>
+              </Link>
+              <Link href="/">
+                <span className="text-blue-600 hover:text-blue-800 cursor-pointer">Upload</span>
               </Link>
               <button 
                 onClick={logout}

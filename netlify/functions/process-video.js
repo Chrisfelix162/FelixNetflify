@@ -125,9 +125,17 @@ exports.handler = async (event, context) => {
 // Helper function to parse form data
 function parseFormData(event) {
   return new Promise((resolve, reject) => {
-    const form = formidable({ multiples: true });
+    // In Netlify Functions, event.body is a string
+    // We need to convert it to a buffer for formidable
+    const formData = new formidable.IncomingForm();
     
-    form.parse(event, (err, fields, files) => {
+    // Create a mock request object
+    const req = {
+      headers: event.headers,
+      body: Buffer.from(event.body, 'base64')
+    };
+    
+    formData.parse(req, (err, fields, files) => {
       if (err) {
         reject(err);
         return;
