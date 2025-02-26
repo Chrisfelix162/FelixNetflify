@@ -36,3 +36,4 @@ keys.env
 
 # Local Netlify folder
 .netlify
+keys.env
